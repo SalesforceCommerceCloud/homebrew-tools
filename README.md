@@ -1,10 +1,10 @@
-# SalesforceCommerceCloud Tools
+# Agentforce Commerce Developer Tools Tap
 
 ## How do I install these formulae?
 
 `brew install salesforcecommercecloud/tools/<formula>`
 
-Or `brew tap salesforcecommercecloud/tools` and then `brew install <formula>`.
+Or `brew tap SalesforceCommerceCloud/tools` and then `brew install <formula>`.
 
 Or, in a `brew bundle` `Brewfile`:
 
