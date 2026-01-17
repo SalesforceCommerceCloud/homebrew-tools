@@ -1,0 +1,124 @@
+name: Update b2c-cli
+
+on:
+  schedule:
+    # Run daily at 9am UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for updates
+        id: check
+        run: |
+          # Get latest version from npm
+          LATEST=$(curl -s https://registry.npmjs.org/@salesforce/b2c-cli/latest | jq -r '.version')
+          echo "Latest npm version: $LATEST"
+
+          # Get current version from formula
+          CURRENT=$(grep -oP '(?<=b2c-cli-)[0-9.]+(?=\.tgz)' Formula/b2c-cli.rb)
+          echo "Current formula version: $CURRENT"
+
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST" != "$CURRENT" ]; then
+            echo "Update available: $CURRENT -> $LATEST"
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "Already up to date"
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update formula
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          LATEST: ${{ steps.check.outputs.latest }}
+          CURRENT: ${{ steps.check.outputs.current }}
+        run: |
+          # Calculate new sha256
+          NEW_SHA=$(curl -sL "https://registry.npmjs.org/@salesforce/b2c-cli/-/b2c-cli-${LATEST}.tgz" | sha256sum | cut -d' ' -f1)
+          echo "New sha256: $NEW_SHA"
+
+          # Update URL
+          sed -i "s|b2c-cli-${CURRENT}\.tgz|b2c-cli-${LATEST}.tgz|g" Formula/b2c-cli.rb
+
+          # Update sha256
+          sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${NEW_SHA}\"|g" Formula/b2c-cli.rb
+
+          echo "Updated formula:"
+          cat Formula/b2c-cli.rb
+
+      - name: Create Pull Request
+        if: steps.check.outputs.needs_update == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = `update-b2c-cli-${{ steps.check.outputs.latest }}`;
+            const base = 'main';
+
+            // Get the default branch SHA
+            const { data: ref } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `heads/${base}`
+            });
+
+            // Create new branch
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branch}`,
+                sha: ref.object.sha
+              });
+            } catch (e) {
+              if (e.status === 422) {
+                console.log('Branch already exists, updating...');
+              } else {
+                throw e;
+              }
+            }
+
+            // Get current file content
+            const { data: file } = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'Formula/b2c-cli.rb',
+              ref: base
+            });
+
+            // Read updated file from workspace
+            const fs = require('fs');
+            const newContent = fs.readFileSync('Formula/b2c-cli.rb', 'utf8');
+
+            // Update file on branch
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'Formula/b2c-cli.rb',
+              message: `b2c-cli: update to ${{ steps.check.outputs.latest }}`,
+              content: Buffer.from(newContent).toString('base64'),
+              sha: file.sha,
+              branch: branch
+            });
+
+            // Create PR
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `b2c-cli: update to ${{ steps.check.outputs.latest }}`,
+              body: `Updates \`@salesforce/b2c-cli\` from ${{ steps.check.outputs.current }} to ${{ steps.check.outputs.latest }}.\n\n[npm package](https://www.npmjs.com/package/@salesforce/b2c-cli)\n[Changelog](https://github.com/SalesforceCommerceCloud/b2c-developer-tooling/releases)`,
+              head: branch,
+              base: base
+            });
+
+            console.log(`Created PR #${pr.number}: ${pr.html_url}`);
