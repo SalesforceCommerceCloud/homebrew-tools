@@ -8,7 +8,7 @@ on:
 
 jobs:
   check-and-update:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
