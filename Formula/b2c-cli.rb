@@ -14,7 +14,11 @@ class B2cCli < Formula
 
   def install
     system "npm", "install", *std_npm_args
-    bin.install_symlink libexec.glob("bin/*")
+
+    # Create wrapper script that sets OCLIF client home for proper auto-update support
+    # This prevents oclif from trying to update to a non-brew location
+    (bin/"b2c").write_env_script libexec/"bin/b2c",
+      B2C_OCLIF_CLIENT_HOME: lib/"client"
   end
 
   test do
