@@ -8,41 +8,44 @@ on:
 
 jobs:
   auto-label:
-    # Only when test-bot succeeds on a pull request
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Add pr-pull label to auto-update PRs
         uses: actions/github-script@v7
         with:
           script: |
-            const prs = context.payload.workflow_run.pull_requests;
-            if (!prs || prs.length === 0) {
-              console.log('No pull requests associated with this workflow run');
+            const branch = context.payload.workflow_run.head_branch;
+            console.log(`Workflow run branch: ${branch}`);
+
+            if (!branch || !branch.startsWith('update-b2c-cli-')) {
+              console.log('Not an auto-update branch, skipping');
               return;
             }
 
-            for (const pr of prs) {
-              const { data: fullPR } = await github.rest.pulls.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pr.number
-              });
+            // Find the open PR for this branch
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
 
-              if (!fullPR.head.ref.startsWith('update-b2c-cli-')) {
-                console.log(`PR #${pr.number} branch "${fullPR.head.ref}" is not an auto-update, skipping`);
-                continue;
-              }
-
-              console.log(`Adding pr-pull label to PR #${pr.number}`);
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: ['pr-pull']
-              });
+            if (prs.length === 0) {
+              console.log(`No open PR found for branch ${branch}`);
+              return;
             }
+
+            const pr = prs[0];
+            console.log(`Adding pr-pull label to PR #${pr.number}`);
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['pr-pull']
+            });
