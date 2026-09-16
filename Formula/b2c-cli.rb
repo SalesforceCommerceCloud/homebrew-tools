@@ -1,8 +1,8 @@
 class B2cCli < Formula
   desc "CLI tool for Salesforce Commerce Cloud B2C operations"
   homepage "https://github.com/SalesforceCommerceCloud/b2c-developer-tooling"
-  url "https://registry.npmjs.org/@salesforce/b2c-cli/-/b2c-cli-1.23.2.tgz"
-  sha256 "d39d0821903373b2d055db2c36b574b89c41ed91cbdc034f6d98bad649b86574"
+  url "https://registry.npmjs.org/@salesforce/b2c-cli/-/b2c-cli-2.0.0.tgz"
+  sha256 "30c30d672ce79d18592c5d9c9db72bff00d156d56d4c202044394f64768b82e8"
   license "Apache-2.0"
 
   livecheck do
